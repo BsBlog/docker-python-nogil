@@ -16,6 +16,7 @@ RUN set -eux; \
 		ca-certificates \
 		netbase \
 		tzdata \
+		git \
 	; \
 	rm -rf /var/lib/apt/lists/*
 
@@ -27,7 +28,6 @@ RUN set -eux; \
 	savedAptMark="$(apt-mark showmanual)"; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends \
-		git \
 		dpkg-dev \
 		gcc \
 		gnupg \
