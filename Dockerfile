@@ -54,9 +54,9 @@ RUN set -eux; \
 	# echo "$PYTHON_SHA256 *python.tar.xz" | sha256sum -c -; \
 	cd /usr/src/; \
 	git clone https://github.com/python/cpython; \
+	mkdir -p /usr/src/python; \
 	mv -f /usr/src/cpython/* /usr/src/python/; \
 	rm -rf /usr/src/cpython/; \
-	mkdir -p /usr/src/python; \
 	# tar --extract --directory /usr/src/python --strip-components=1 --file python.tar.xz; \
 	# rm python.tar.xz; \
 	\
