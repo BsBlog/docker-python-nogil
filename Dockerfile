@@ -57,7 +57,7 @@ RUN set -eux; \
 	# rm python.tar.xz; \
 	\
 	cd /usr/src/python; \
-	git clone https://github.com/python/cpython \
+	git clone https://github.com/python/cpython; \
 	gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; \
 	./configure \
 		--build="$gnuArch" \
