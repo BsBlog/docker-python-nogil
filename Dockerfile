@@ -58,6 +58,7 @@ RUN set -eux; \
 	\
 	cd /usr/src/python; \
 	git clone https://github.com/python/cpython; \
+	mv -f ./cpython/* ./*; \
 	gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; \
 	./configure \
 		--build="$gnuArch" \
