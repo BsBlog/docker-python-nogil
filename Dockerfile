@@ -16,7 +16,6 @@ RUN set -eux; \
 		ca-certificates \
 		netbase \
 		tzdata \
-		git \
 	; \
 	rm -rf /var/lib/apt/lists/*
 
@@ -29,6 +28,7 @@ RUN set -eux; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends \
 		dpkg-dev \
+  		git \
 		gcc \
 		gnupg \
 		libbluetooth-dev \
