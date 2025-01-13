@@ -19,7 +19,7 @@ RUN set -eux; \
 	; \
 	rm -rf /var/lib/apt/lists/*
 
-# ENV PYTHON_VERSION 3.13.1
+ENV PYTHON_VERSION 3.14.0a3
 # ENV PYTHON_SHA256 9cf9427bee9e2242e3877dd0f6b641c1853ca461f39d6503ce260a59c80bf0d9
 
 RUN set -eux; \
@@ -28,7 +28,6 @@ RUN set -eux; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends \
 		dpkg-dev \
-  		git \
 		gcc \
 		gnupg \
 		libbluetooth-dev \
@@ -50,15 +49,11 @@ RUN set -eux; \
 		zlib1g-dev \
 	; \
 	\
-	# wget -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz"; \
+	wget -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz"; \
 	# echo "$PYTHON_SHA256 *python.tar.xz" | sha256sum -c -; \
-	cd /usr/src/; \
-	git clone https://github.com/python/cpython; \
 	mkdir -p /usr/src/python; \
-	mv -f /usr/src/cpython/* /usr/src/python/; \
-	rm -rf /usr/src/cpython/; \
-	# tar --extract --directory /usr/src/python --strip-components=1 --file python.tar.xz; \
-	# rm python.tar.xz; \
+	tar --extract --directory /usr/src/python --strip-components=1 --file python.tar.xz; \
+	rm python.tar.xz; \
 	\
 	cd /usr/src/python; \
 	gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; \
