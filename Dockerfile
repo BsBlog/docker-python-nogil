@@ -127,7 +127,7 @@ RUN set -eux; \
 
 # make some useful symlinks that are expected to exist ("/usr/local/bin/python" and friends)
 RUN set -eux; \
-	for src in idle3 pip3 pydoc3 python3 python3-config; do \
+	for src in idle3 pip3 pydoc3 python3 python3t python3-config; do \
 		dst="$(echo "$src" | tr -d 3)"; \
 		[ -s "/usr/local/bin/$src" ]; \
 		[ ! -e "/usr/local/bin/$dst" ]; \
