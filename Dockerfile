@@ -19,8 +19,7 @@ RUN set -eux; \
 	; \
 	rm -rf /var/lib/apt/lists/*
 
-ENV PYTHON_VERSION 3.14.0a4
-# ENV PYTHON_SHA256 9cf9427bee9e2242e3877dd0f6b641c1853ca461f39d6503ce260a59c80bf0d9
+ENV PYTHON_VERSION 3.13.1
 
 RUN set -eux; \
 	\
@@ -50,7 +49,6 @@ RUN set -eux; \
 	; \
 	\
 	wget -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz"; \
-	# echo "$PYTHON_SHA256 *python.tar.xz" | sha256sum -c -; \
 	mkdir -p /usr/src/python; \
 	tar --extract --directory /usr/src/python --strip-components=1 --file python.tar.xz; \
 	rm python.tar.xz; \
