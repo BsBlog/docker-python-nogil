@@ -87,12 +87,13 @@ jobs:
           echo "REPO_NAME=$REPO_NAME" >> $GITHUB_ENV
 
       - name: Delete old Docker images
-        uses: actions/delete-package-versions@main
-        with:
-          package-name: ${{ env.REPO_NAME }}
-          package-type: container
-          min-versions-to-keep: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -X DELETE \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/users/${{github.repository_owner}}/packages/container/${{env.IMAGE_NAME}}
 
       - name: Build and push multi-architecture images
         id: push
