@@ -6,14 +6,22 @@ on:
 
   workflow_dispatch:
     inputs:
-      chosen-platforms:
-        required: true
-        type: choice
-        options:
-        - linux/386
-        - linux/amd64
-        - linux/arm/v7
-        - linux/arm64/v8
+      linux_386:
+        description: 'Build for linux/386'
+        type: boolean
+        default: true
+      linux_amd64:
+        description: 'Build for linux/amd64'
+        type: boolean
+        default: true
+      linux_arm_v7:
+        description: 'Build for linux/arm/v7'
+        type: boolean
+        default: true
+      linux_arm64_v8:
+        description: 'Build for linux/arm64/v8'
+        type: boolean
+        default: true
 
 env:
   REGISTRY: ghcr.io
@@ -34,6 +42,29 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@main
+
+      - name: Setup platforms
+        id: set-platforms
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 从workflow_dispatch输入获取平台
+            PLATFORMS=""
+            [ "${{ inputs.linux_386 }}" = "true" ] && PLATFORMS+="linux/386,"
+            [ "${{ inputs.linux_amd64 }}" = "true" ] && PLATFORMS+="linux/amd64,"
+            [ "${{ inputs.linux_arm_v7 }}" = "true" ] && PLATFORMS+="linux/arm/v7,"
+            [ "${{ inputs.linux_arm64_v8 }}" = "true" ] && PLATFORMS+="linux/arm64/v8,"
+            PLATFORMS=$(echo $PLATFORMS | sed 's/,$//')
+          else
+            PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
+          fi
+          
+          if [ -z "$PLATFORMS" ]; then
+            echo "No platforms selected, using default"
+            PLATFORMS="linux/amd64"
+          fi
+          
+          echo "Selected platforms: $PLATFORMS"
+          echo "PLATFORMS=$PLATFORMS" >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@master
@@ -60,7 +91,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: ${{ inputs.chosen-platforms }}
+          platforms: ${{ env.PLATFORMS }}
           push: true
           tags: |
             ${{env.REGISTRY}}/${{env.IMAGE_NAME_LOWERCASE}}:latest
