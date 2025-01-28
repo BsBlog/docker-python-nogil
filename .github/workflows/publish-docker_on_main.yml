@@ -47,12 +47,11 @@ jobs:
         id: set-platforms
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 从workflow_dispatch输入获取平台
             PLATFORMS=""
-            [ "${{ inputs.linux_386 }}" = "true" ] && PLATFORMS+="linux/386,"
-            [ "${{ inputs.linux_amd64 }}" = "true" ] && PLATFORMS+="linux/amd64,"
-            [ "${{ inputs.linux_arm_v7 }}" = "true" ] && PLATFORMS+="linux/arm/v7,"
-            [ "${{ inputs.linux_arm64_v8 }}" = "true" ] && PLATFORMS+="linux/arm64/v8,"
+            if [ "${{ inputs.linux_386 }}" = "true" ]; then PLATFORMS+="linux/386,"; fi
+            if [ "${{ inputs.linux_amd64 }}" = "true" ]; then PLATFORMS+="linux/amd64,"; fi
+            if [ "${{ inputs.linux_arm_v7 }}" = "true" ]; then PLATFORMS+="linux/arm/v7,"; fi
+            if [ "${{ inputs.linux_arm64_v8 }}" = "true" ]; then PLATFORMS+="linux/arm64/v8,"; fi
             PLATFORMS=$(echo $PLATFORMS | sed 's/,$//')
           else
             PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
