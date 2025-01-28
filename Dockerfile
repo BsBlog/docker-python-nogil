@@ -126,4 +126,4 @@ RUN set -eux; \
 		ln -svT "$src" "/usr/local/bin/$dst"; \
 	done
 
-CMD ["python3t"]
+CMD ["python3","-X","gil=0"]
