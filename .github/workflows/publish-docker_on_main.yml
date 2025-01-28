@@ -90,11 +90,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ENCODED_IMAGE_NAME=${IMAGE_NAME//\//%2F}
           curl -X DELETE \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/users/${{github.repository_owner}}/packages/container/${ENCODED_IMAGE_NAME}
+            https://api.github.com/users/${{github.repository_owner}}/packages/container/${{env.REPO_NAME}}
 
       - name: Build and push multi-architecture images
         id: push
