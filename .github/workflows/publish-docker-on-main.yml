@@ -29,9 +29,9 @@ env:
 
 jobs:
   Publish-Docker-on-main:
-    permissions: write-all
     name: Publish Docker on main
     runs-on: ubuntu-latest
+    permissions: write-all
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
