@@ -55,7 +55,7 @@ jobs:
           
           if [ -z "$PLATFORMS" ]; then
             echo "No platforms selected, using default"
-            PLATFORMS="linux/amd64"
+            PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
           fi
           
           echo "Selected platforms: $PLATFORMS"
