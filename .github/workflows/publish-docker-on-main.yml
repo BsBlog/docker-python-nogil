@@ -1,4 +1,4 @@
-name: Publish Latest Docker image
+name: Publish Docker on main
 
 on:
   push:
@@ -28,8 +28,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  push_to_registries:
-    name: Push docker image to docker hub
+  Publish-Docker-on-main:
+    permissions: write-all
+    name: Publish Docker on main
     runs-on: ubuntu-latest
     steps:
       - name: Free Disk-Space
