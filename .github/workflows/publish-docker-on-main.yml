@@ -25,7 +25,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: python-nogil
+  IMAGE_NAME: BsBlog/python-nogil
 
 jobs:
   Publish-Docker-on-main:
