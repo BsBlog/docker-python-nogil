@@ -4,66 +4,28 @@ on:
   push:
     branches: ['main']
 
-  workflow_dispatch:
-    inputs:
-      linux_386:
-        description: 'Build for linux/386'
-        type: boolean
-        default: true
-      linux_amd64:
-        description: 'Build for linux/amd64'
-        type: boolean
-        default: true
-      linux_arm_v7:
-        description: 'Build for linux/arm/v7'
-        type: boolean
-        default: true
-      linux_arm64_v8:
-        description: 'Build for linux/arm64/v8'
-        type: boolean
-        default: true
+  workflow_dispatch: {}
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: BsBlog/python-nogil
 
 jobs:
-  setup:
-    name: Setup platforms
-    runs-on: ubuntu-latest
-    outputs:
-      platforms: ${{ steps.set-platforms.outputs.platforms }}
-    steps:
-      - name: Determine selected platforms
-        id: set-platforms
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PLATFORMS=""
-            [ "${{ inputs.linux_386 }}" = "true" ] && PLATFORMS+="linux/386,"
-            [ "${{ inputs.linux_amd64 }}" = "true" ] && PLATFORMS+="linux/amd64,"
-            [ "${{ inputs.linux_arm_v7 }}" = "true" ] && PLATFORMS+="linux/arm/v7,"
-            [ "${{ inputs.linux_arm64_v8 }}" = "true" ] && PLATFORMS+="linux/arm64/v8,"
-            PLATFORMS=$(echo $PLATFORMS | sed 's/,$//')
-          else
-            PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
-          fi
-
-          [ -z "$PLATFORMS" ] && PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
-          
-          echo "Selected platforms: $PLATFORMS"
-          echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
-
   Prepare:
     name: Prepare Environment
     runs-on: ubuntu-latest
-    needs: setup
     permissions: write-all
     steps:
       - name: Free Disk-Space
-        run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
+        run: |
+          df -h
+          sudo apt-get clean
+          docker system prune -a -f
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h
 
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@master
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@master
@@ -75,24 +37,20 @@ jobs:
         uses: docker/login-action@master
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ github.token }}
 
       - name: Normalize Image Name
-        id: convert
         run: |
           IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')
           echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
-          D_IMAGE_NAME=$(echo $IMAGE_NAME | cut -d'/' -f2)
-          echo "D_IMAGE_NAME=$D_IMAGE_NAME" >> $GITHUB_ENV
 
   Build-and-Push:
     name: Build and Push (${{ matrix.platform }})
-    needs: [setup, prepare]
+    needs: Prepare
     runs-on: ubuntu-latest
     permissions: write-all
     strategy:
-      # 固定矩阵配置
       matrix:
         platform: 
           - linux/386
@@ -108,24 +66,22 @@ jobs:
             safe_name: linux-arm-v7
           - platform: linux/arm64/v8
             safe_name: linux-arm64-v8
-    
-    if: contains(needs.setup.outputs.platforms, matrix.platform)
-    
+            
     steps:
-      - name: Checkout (Reuse)
+      - name: Checkout
         uses: actions/checkout@main
 
-      - name: Set up QEMU (Reuse)
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@master
 
-      - name: Set up Docker Buildx (Reuse)
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@master
 
-      - name: Login to Registry (Reuse)
+      - name: Login to Registry
         uses: docker/login-action@master
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ github.token }}
 
       - name: Build and push
@@ -136,40 +92,45 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:${{ matrix.safe_name }}
+            ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest-${{ matrix.safe_name }}
 
       - name: Output image reference
         id: image
         run: |
-          echo "platform=${{ matrix.safe_name }}" >> $GITHUB_OUTPUT
-          echo "image=${{env.REGISTRY}}/${{env.IMAGE_NAME}}:${{ matrix.safe_name }}" >> $GITHUB_OUTPUT
+          echo "image=${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest-${{ matrix.safe_name }}" >> $GITHUB_OUTPUT
 
   Create-Manifest:
     name: Create Multi-Arch Manifest
-    needs: build-and-push
+    needs: Build-and-Push
     runs-on: ubuntu-latest
     steps:
       - name: Login to Registry
         uses: docker/login-action@master
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ github.token }}
 
       - name: Create manifest for latest
         run: |
-          docker buildx imagetools create --tag ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest \
-          ${{ join(needs.build-and-push.outputs.image, ' ') }}
+          TAGS=""
+          for platform in linux-386 linux-amd64 linux-arm-v7 linux-arm64-v8; do
+            TAGS+=" ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest-$platform"
+          done
+          
+          docker buildx imagetools create -t \
+            ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest \
+            $TAGS
         
       - name: Output manifest digest
         id: manifest
         run: |
-          digest=$(docker buildx imagetools inspect ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest --format "{{.Manifest.Digest}}")
+          digest=$(docker buildx imagetools inspect ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest --format '{{.Manifest.Digest}}')
           echo "digest=$digest" >> $GITHUB_OUTPUT
 
   Finalize:
     name: Finalize Workflow
-    needs: [create-manifest]
+    needs: Create-Manifest
     runs-on: ubuntu-latest
     steps:
       - name: Generate artifact attestation
