@@ -1,9 +1,8 @@
-name: Publish Docker on main
+name: Publish Docker on main (Multi-Arch, Parallel)
 
 on:
   push:
     branches: ['main']
-
   workflow_dispatch: {}
 
 env:
@@ -34,27 +33,26 @@ jobs:
             https://api.github.com/users/${{github.repository_owner}}/packages/container/${{env.D_IMAGE_NAME}}
 
   Build-and-Push:
-    name: Build and Push (${{ matrix.platform }})
+    name: Build and Push ${{ matrix.platform }}
     needs: Prepare
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions: write-all
     strategy:
       matrix:
-        platform: 
-          - linux/386
-          - linux/amd64
-          - linux/arm/v7
-          - linux/arm64/v8
         include:
-          - platform: linux/386
-            safe_name: linux-386
           - platform: linux/amd64
-            safe_name: linux-amd64
+            runner: ubuntu-latest
+            tag_suffix: amd64
+          - platform: linux/arm64
+            runner: ubuntu-latest-arm64
+            tag_suffix: arm64
+          - platform: linux/386
+            runner: ubuntu-latest
+            tag_suffix: 386
           - platform: linux/arm/v7
-            safe_name: linux-arm-v7
-          - platform: linux/arm64/v8
-            safe_name: linux-arm64-v8
-            
+            runner: ubuntu-latest-arm64
+            tag_suffix: armv7
+        
     steps:
       - name: Free Disk-Space
         run: |
@@ -67,12 +65,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@main
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@master
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@master
-
+        
       - name: Login to Registry
         uses: docker/login-action@master
         with:
@@ -96,8 +91,7 @@ jobs:
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.tag_suffix }}
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@main
@@ -106,9 +100,45 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
+  Create-Manifest:
+    name: Create Multi-Arch Manifest
+    needs: [Build-and-Push]
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@master
+      
+      - name: Login to Registry
+        uses: docker/login-action@master
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Convert repository name to lowercase
+        id: convert
+        run: |
+          IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+          D_IMAGE_NAME=$(echo $IMAGE_NAME | cut -d'/' -f2)
+          echo "D_IMAGE_NAME=$D_IMAGE_NAME" >> $GITHUB_ENV
+
+      - name: Create and push manifest list
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-amd64 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-arm64 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-386 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-armv7
+
   Finalize:
     name: Finalize Workflow
-    needs: Build-and-Push
+    needs: Create-Manifest
     runs-on: ubuntu-latest
     steps:
       - name: Delete old workflow runs
