@@ -32,17 +32,17 @@ jobs:
     name: Setup platforms
     runs-on: ubuntu-latest
     outputs:
-      matrix_data: ${{ steps.set-platforms.outputs.matrix }}
+      platforms: ${{ steps.set-platforms.outputs.platforms }}
     steps:
-      - name: Generate platform matrix
+      - name: Determine selected platforms
         id: set-platforms
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             PLATFORMS=""
-            if [ "${{ inputs.linux_386 }}" = "true" ]; then PLATFORMS+="linux/386,"; fi
-            if [ "${{ inputs.linux_amd64 }}" = "true" ]; then PLATFORMS+="linux/amd64,"; fi
-            if [ "${{ inputs.linux_arm_v7 }}" = "true" ]; then PLATFORMS+="linux/arm/v7,"; fi
-            if [ "${{ inputs.linux_arm64_v8 }}" = "true" ]; then PLATFORMS+="linux/arm64/v8,"; fi
+            [ "${{ inputs.linux_386 }}" = "true" ] && PLATFORMS+="linux/386,"
+            [ "${{ inputs.linux_amd64 }}" = "true" ] && PLATFORMS+="linux/amd64,"
+            [ "${{ inputs.linux_arm_v7 }}" = "true" ] && PLATFORMS+="linux/arm/v7,"
+            [ "${{ inputs.linux_arm64_v8 }}" = "true" ] && PLATFORMS+="linux/arm64/v8,"
             PLATFORMS=$(echo $PLATFORMS | sed 's/,$//')
           else
             PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
@@ -51,17 +51,13 @@ jobs:
           [ -z "$PLATFORMS" ] && PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
           
           echo "Selected platforms: $PLATFORMS"
-          MATRIX_JSON="{\"platforms\":[\"$(echo $PLATFORMS | sed 's/,/","/g')\"]}"
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
 
-  Build-and-Push:
-    name: Build and push (${{ matrix.platform }})
-    needs: setup
+  Prepare:
+    name: Prepare Environment
     runs-on: ubuntu-latest
+    needs: setup
     permissions: write-all
-    strategy:
-      matrix:
-        platform: ${{ fromJson(needs.setup.outputs.matrix_data).platforms }}
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
@@ -69,20 +65,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@main
 
-      - name: Set up QEMU
+      - name: Setup QEMU
         uses: docker/setup-qemu-action@master
 
-      - name: Set up Docker Buildx
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@master
 
-      - name: Login to Docker Hub
+      - name: Login to Container Registry
         uses: docker/login-action@master
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Convert repository name to lowercase
+      - name: Normalize Image Name
         id: convert
         run: |
           IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')
@@ -90,7 +86,49 @@ jobs:
           D_IMAGE_NAME=$(echo $IMAGE_NAME | cut -d'/' -f2)
           echo "D_IMAGE_NAME=$D_IMAGE_NAME" >> $GITHUB_ENV
 
-      - name: Build and push single architecture
+  Build-and-Push:
+    name: Build and Push (${{ matrix.platform }})
+    needs: [setup, prepare]
+    runs-on: ubuntu-latest
+    permissions: write-all
+    strategy:
+      # 固定矩阵配置
+      matrix:
+        platform: 
+          - linux/386
+          - linux/amd64
+          - linux/arm/v7
+          - linux/arm64/v8
+        include:
+          - platform: linux/386
+            safe_name: linux-386
+          - platform: linux/amd64
+            safe_name: linux-amd64
+          - platform: linux/arm/v7
+            safe_name: linux-arm-v7
+          - platform: linux/arm64/v8
+            safe_name: linux-arm64-v8
+    
+    if: contains(needs.setup.outputs.platforms, matrix.platform)
+    
+    steps:
+      - name: Checkout (Reuse)
+        uses: actions/checkout@main
+
+      - name: Set up QEMU (Reuse)
+        uses: docker/setup-qemu-action@master
+
+      - name: Set up Docker Buildx (Reuse)
+        uses: docker/setup-buildx-action@master
+
+      - name: Login to Registry (Reuse)
+        uses: docker/login-action@master
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Build and push
         uses: docker/build-push-action@master
         with:
           context: .
@@ -98,38 +136,39 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest-${{ matrix.platform | replace('/', '-') }}
+            ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:${{ matrix.safe_name }}
+
+      - name: Output image reference
+        id: image
+        run: |
+          echo "platform=${{ matrix.safe_name }}" >> $GITHUB_OUTPUT
+          echo "image=${{env.REGISTRY}}/${{env.IMAGE_NAME}}:${{ matrix.safe_name }}" >> $GITHUB_OUTPUT
 
   Create-Manifest:
     name: Create Multi-Arch Manifest
-    needs: [setup, build-and-push]
+    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Login to Docker Hub
+      - name: Login to Registry
         uses: docker/login-action@master
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Create manifest
-        env:
-          PLATFORMS: ${{ needs.setup.outputs.matrix_data }}
+      - name: Create manifest for latest
         run: |
-          BASE_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          MANIFEST_CMD="docker buildx imagetools create -t $BASE_IMAGE"
-          
-          ${{ toJson(needs.build-and-push.outputs) }}
-          for platform in $(echo '${{ join(needs.build-and-push.*.matrix.platform) }}' | tr ' ' '\n' | sort -u); do
-            safe_platform=$(echo $platform | sed 's|/|-|g')
-            MANIFEST_CMD+=" $BASE_IMAGE-$safe_platform"
-          done
-          
-          echo "执行命令: $MANIFEST_CMD"
-          $MANIFEST_CMD
+          docker buildx imagetools create --tag ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest \
+          ${{ join(needs.build-and-push.outputs.image, ' ') }}
+        
+      - name: Output manifest digest
+        id: manifest
+        run: |
+          digest=$(docker buildx imagetools inspect ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest --format "{{.Manifest.Digest}}")
+          echo "digest=$digest" >> $GITHUB_OUTPUT
 
-  Cleanup:
-    name: Cleanup and Verification
+  Finalize:
+    name: Finalize Workflow
     needs: [create-manifest]
     runs-on: ubuntu-latest
     steps:
@@ -140,7 +179,7 @@ jobs:
           subject-digest: ${{ needs.create-manifest.outputs.digest }}
           push-to-registry: true
 
-      - name: Delete old workflow run
+      - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@main
         with:
           token: ${{ github.token }}
