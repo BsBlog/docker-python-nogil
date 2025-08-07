@@ -44,13 +44,13 @@ jobs:
             runner: ubuntu-latest
             tag_suffix: amd64
           - platform: linux/arm64
-            runner: ubuntu-latest-arm64
+            runner: ubuntu-24.04-arm
             tag_suffix: arm64
           - platform: linux/386
             runner: ubuntu-latest
             tag_suffix: 386
           - platform: linux/arm/v7
-            runner: ubuntu-latest-arm64
+            runner: ubuntu-24.04-arm
             tag_suffix: armv7
         
     steps:
