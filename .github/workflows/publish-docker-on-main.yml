@@ -28,18 +28,13 @@ env:
   IMAGE_NAME: BsBlog/python-nogil
 
 jobs:
-  Publish-Docker-on-main:
-    name: Publish Docker on main
+  setup:
+    name: Setup platforms
     runs-on: ubuntu-latest
-    permissions: write-all
+    outputs:
+      matrix_data: ${{ steps.set-platforms.outputs.matrix }}
     steps:
-      - name: Free Disk-Space
-        run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
-
-      - name: Checkout
-        uses: actions/checkout@main
-
-      - name: Setup platforms
+      - name: Generate platform matrix
         id: set-platforms
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -52,14 +47,27 @@ jobs:
           else
             PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
           fi
-          
-          if [ -z "$PLATFORMS" ]; then
-            echo "No platforms selected, using default"
-            PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
-          fi
+
+          [ -z "$PLATFORMS" ] && PLATFORMS="linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8"
           
           echo "Selected platforms: $PLATFORMS"
-          echo "PLATFORMS=$PLATFORMS" >> $GITHUB_ENV
+          MATRIX_JSON="{\"platforms\":[\"$(echo $PLATFORMS | sed 's/,/","/g')\"]}"
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+  Build-and-Push:
+    name: Build and push (${{ matrix.platform }})
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions: write-all
+    strategy:
+      matrix:
+        platform: ${{ fromJson(needs.setup.outputs.matrix_data).platforms }}
+    steps:
+      - name: Free Disk-Space
+        run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
+
+      - name: Checkout
+        uses: actions/checkout@main
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@master
@@ -82,31 +90,54 @@ jobs:
           D_IMAGE_NAME=$(echo $IMAGE_NAME | cut -d'/' -f2)
           echo "D_IMAGE_NAME=$D_IMAGE_NAME" >> $GITHUB_ENV
 
-      - name: Delete old Docker images
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          curl -X DELETE \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/users/${{github.repository_owner}}/packages/container/${{env.D_IMAGE_NAME}}
-
-      - name: Build and push multi-architecture images
-        id: push
+      - name: Build and push single architecture
         uses: docker/build-push-action@master
         with:
           context: .
           file: ./Dockerfile
-          platforms: ${{ env.PLATFORMS }}
+          platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest
+            ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest-${{ matrix.platform | replace('/', '-') }}
 
+  Create-Manifest:
+    name: Create Multi-Arch Manifest
+    needs: [setup, build-and-push]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@master
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Create manifest
+        env:
+          PLATFORMS: ${{ needs.setup.outputs.matrix_data }}
+        run: |
+          BASE_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          MANIFEST_CMD="docker buildx imagetools create -t $BASE_IMAGE"
+          
+          ${{ toJson(needs.build-and-push.outputs) }}
+          for platform in $(echo '${{ join(needs.build-and-push.*.matrix.platform) }}' | tr ' ' '\n' | sort -u); do
+            safe_platform=$(echo $platform | sed 's|/|-|g')
+            MANIFEST_CMD+=" $BASE_IMAGE-$safe_platform"
+          done
+          
+          echo "执行命令: $MANIFEST_CMD"
+          $MANIFEST_CMD
+
+  Cleanup:
+    name: Cleanup and Verification
+    needs: [create-manifest]
+    runs-on: ubuntu-latest
+    steps:
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@main
         with:
           subject-name: ${{env.REGISTRY}}/${{env.IMAGE_NAME}}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ needs.create-manifest.outputs.digest }}
           push-to-registry: true
 
       - name: Delete old workflow run
