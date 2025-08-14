@@ -152,17 +152,30 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-ppc64le \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-riscv64 \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-s390x \
-
-      - name: Delete temporary images
+      
+      - name: Delete Temporary Images
+        id: cleanup
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          docker buildx imagetools rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-amd64 || true
-          docker buildx imagetools rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-i386 || true
-          docker buildx imagetools rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-arm64 || true
-          docker buildx imagetools rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-armv7 || true
-          docker buildx imagetools rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-armv6 || true
-          docker buildx imagetools rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-ppc64le || true
-          docker buildx imagetools rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-riscv64 || true
-          docker buildx imagetools rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-s390x || true
+          VERSION_IDS=$(curl -s -X GET \
+            -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/users/${{github.repository_owner}}/packages/container/${{env.D_IMAGE_NAME}}/versions" | \
+            jq -r '.[] | select(.metadata.container.tags[] | startswith("${{ github.sha }}")) | .id')
+
+          if [ -n "$VERSION_IDS" ]; then
+            echo "$VERSION_IDS"
+            for version_id in $VERSION_IDS; do
+              echo "$version_id..."
+              curl -X DELETE \
+                -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/users/${{github.repository_owner}}/packages/container/${{env.D_IMAGE_NAME}}/versions/$version_id"
+            done
+          else
+            echo "No temporary images to delete."
+          fi
 
   Finalize:
     name: Finalize Workflow
