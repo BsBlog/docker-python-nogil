@@ -56,15 +56,9 @@ jobs:
           - platform: linux/arm/v6
             runner: ubuntu-24.04-arm
             tag_suffix: armv6
-          - platform: linux/ppc64le
-            runner: ubuntu-latest
-            tag_suffix: ppc64le
-          - platform: linux/riscv64
-            runner: ubuntu-latest
-            tag_suffix: riscv64
-          - platform: linux/s390x
-            runner: ubuntu-latest
-            tag_suffix: s390x
+          - platform: linux/arm/v5
+            runner: ubuntu-24.04-arm
+            tag_suffix: armv5
         
     steps:
       - name: Free Disk-Space
@@ -139,7 +133,7 @@ jobs:
       - name: Create and push manifest list
         id: push
         run: |
-          TAGS=("amd64" "i386" "arm64" "armv7" "armv6" "ppc64le" "riscv64" "s390x")
+          TAGS=("amd64" "i386" "arm64" "armv7" "armv6" "armv5")
           SUCCESSFUL_IMAGES=""
           for tag in "${TAGS[@]}"; do
             IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-$tag"
