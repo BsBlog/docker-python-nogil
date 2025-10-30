@@ -34,7 +34,6 @@ RUN set -eux; \
 		libbz2-dev \
 		libc6-dev \
 		libdb-dev \
-		libexpat1-dev \
 		libffi-dev \
 		libgdbm-dev \
 		liblzma-dev \
@@ -42,6 +41,7 @@ RUN set -eux; \
 		libreadline-dev \
 		libsqlite3-dev \
 		libssl-dev \
+		libzstd-dev \
 		make \
 		tk-dev \
 		uuid-dev \
