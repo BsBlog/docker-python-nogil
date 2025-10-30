@@ -19,8 +19,8 @@ RUN set -eux; \
 	; \
 	apt-get dist-clean
 
-ENV PYTHON_VERSION 3.14.0
-ENV PYTHON_SHA256 2299dae542d395ce3883aca00d3c910307cd68e0b2f7336098c8e7b7eee9f3e9
+ENV PYTHON_VERSION 3.13.9
+ENV PYTHON_SHA256 ed5ef34cda36cfa2f3a340f07cac7e7814f91c7f3c411f6d3562323a866c5c66
 
 RUN set -eux; \
 	\
@@ -41,7 +41,6 @@ RUN set -eux; \
 		libreadline-dev \
 		libsqlite3-dev \
 		libssl-dev \
-		libzstd-dev \
 		make \
 		tk-dev \
 		uuid-dev \
