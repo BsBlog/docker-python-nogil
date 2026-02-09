@@ -19,8 +19,8 @@ RUN set -eux; \
 	; \
 	apt-get dist-clean
 
-ENV PYTHON_VERSION 3.13.9
-ENV PYTHON_SHA256 ed5ef34cda36cfa2f3a340f07cac7e7814f91c7f3c411f6d3562323a866c5c66
+ENV PYTHON_VERSION 3.14.3
+ENV PYTHON_SHA256 a97d5549e9ad81fe17159ed02c68774ad5d266c72f8d9a0b5a9c371fe85d902b
 
 RUN set -eux; \
 	\
@@ -41,6 +41,7 @@ RUN set -eux; \
 		libreadline-dev \
 		libsqlite3-dev \
 		libssl-dev \
+		libzstd-dev \
 		make \
 		tk-dev \
 		uuid-dev \
@@ -99,7 +100,7 @@ RUN set -eux; \
 	rm python; \
 	make -j "$nproc" \
 		"EXTRA_CFLAGS=${EXTRA_CFLAGS:-}" \
-		"LDFLAGS=${LDFLAGS:--Wl},-rpath='\$\$ORIGIN/../lib'" \
+		"LDFLAGS=${LDFLAGS:-} -Wl,-rpath='\$\$ORIGIN/../lib'" \
 		python \
 	; \
 	make install; \
