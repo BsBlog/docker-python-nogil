@@ -145,6 +145,3 @@ RUN set -eux; \
 	done
 
 CMD ["python3","-X","gil=0"]
-
-abc def ghi jkl mno pqr stu
-abc def ghi jkl mno pqr stu
